@@ -128,10 +128,12 @@
           <Link>assets\rebuiltbundle</Link>
         </EmbeddedResource>
         <Content Include=".gitignore" />
+        <Content Include="CHANGELOG.md" />
         <Content Include="environment.props" />
         <Content Include="ILRepack.targets" />
         <EmbeddedResource Include="translations\English.yml" />
         <Content Include="Libs\ServerSync.dll" />
+        <Content Include="README.md" />
         <Content Include="UpdateManifest.ps1" />
     </ItemGroup>
     <ItemGroup>
