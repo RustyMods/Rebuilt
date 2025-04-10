@@ -22,7 +22,6 @@ public class GhostPiece : MonoBehaviour
 
     public bool m_supports;
     public int m_comfort;
-    
     public void Awake()
     {
         m_nview = GetComponent<ZNetView>();
@@ -42,7 +41,7 @@ public class GhostPiece : MonoBehaviour
         m_instances.Remove(this);
     }
 
-    public void Start()
+    public void OnEnable()
     {
         if (!m_nview || !m_nview.IsValid() || m_nview.GetZDO() == null) return;
         if (!IsGhost()) return;
@@ -56,12 +55,15 @@ public class GhostPiece : MonoBehaviour
         }
     }
 
+    public void RemoveBedSpawnPoint()
+    {
+        if (!TryGetComponent(out Bed bed) || !m_nview.IsOwner() || Game.instance == null) return;
+        Game.instance.RemoveCustomSpawnPoint(bed.GetSpawnPoint());
+    }
+
     public void Destroy(HitData? hitData, bool blockDrop, bool ghost = true)
     {
-        if (TryGetComponent(out Bed bed) && m_nview.IsOwner() && Game.instance != null)
-        {
-            Game.instance.RemoveCustomSpawnPoint(bed.GetSpawnPoint());
-        }
+        RemoveBedSpawnPoint();
         m_nview.GetZDO().Set(ZDOVars.s_health, 0.0f);
         if (ghost)
         {
@@ -79,13 +81,7 @@ public class GhostPiece : MonoBehaviour
             m_wearNTear.m_health = 0.0f;
             m_wearNTear.ClearCachedSupport();
         }
-        if (m_piece && !blockDrop)
-        {
-            if (RebuiltPlugin._requireResources.Value is RebuiltPlugin.Toggle.On)
-            {
-                m_piece.DropResources();
-            }
-        }
+        DropResources(blockDrop);
 
         m_wearNTear.m_onDestroyed?.Invoke();
 
@@ -105,21 +101,49 @@ public class GhostPiece : MonoBehaviour
         if (!ghost) ZNetScene.instance.Destroy(gameObject);
     }
 
+    public void DropResources(bool blockDrop)
+    {
+        if (!m_piece || blockDrop || RebuiltPlugin._requireResources.Value is RebuiltPlugin.Toggle.Off) return;
+        m_piece.DropResources();
+    }
+
+    public bool InActivePlayerWard()
+    {
+        if (RebuiltPlugin._requireWard.Value is RebuiltPlugin.Toggle.Off) return true;
+        foreach (var area in PrivateArea.m_allAreas)
+        {
+            if (area.IsEnabled() && area.m_ownerFaction == Character.Faction.Players &&
+                area.IsInside(transform.position, 0.0f))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void Ghost(HitData? hitData, bool blockDrop)
     {
         if (m_nview == null) return;
-        Destroy(hitData, blockDrop, true);
-        EnableComponents(false);
-        SetupGhostMaterials<MeshRenderer>();
-        SetupGhostMaterials<SkinnedMeshRenderer>();
-        
-        m_nview.GetZDO().Set(GhostedHash, true);
+        if (!InActivePlayerWard())
+        {
+            Remove(blockDrop);
+        }
+        else
+        {
+            Destroy(hitData, blockDrop, true);
+            EnableComponents(false);
+            SetupGhostMaterials<MeshRenderer>();
+            SetupGhostMaterials<SkinnedMeshRenderer>();
+            SetGhosted(true);
+        }
     }
     
     public bool Rebuild()
     {
         if (RebuiltPlugin._requireResources.Value is RebuiltPlugin.Toggle.On)
         {
+            if (!Player.m_localPlayer) return false;
             if (!Player.m_localPlayer.NoCostCheat())
             {
                 if (!Player.m_localPlayer.HaveRequirements(m_piece, Player.RequirementMode.CanBuild)) return false;
@@ -131,13 +155,15 @@ public class GhostPiece : MonoBehaviour
         EnableComponents(true);
         ResetMaterials();
         m_wearNTear.UpdateSupport();
-        m_nview.GetZDO().Set(GhostedHash, false);
+        SetGhosted(false);
         return true;
     }
+
+    public void SetGhosted(bool isGhost) => m_nview.GetZDO().Set(GhostedHash, isGhost);
     
     public void EnableColliders(bool enable)
     {
-        foreach (var kvp in m_colliderTriggers)
+        foreach (KeyValuePair<Collider, bool> kvp in m_colliderTriggers)
         {
             if (kvp.Key is MeshCollider { convex: false })
             {
@@ -289,6 +315,7 @@ public class GhostPiece : MonoBehaviour
     {
         private static void Postfix(Hud __instance)
         {
+            if (!Player.m_localPlayer) return;
             if (RebuiltPlugin._enabled.Value is RebuiltPlugin.Toggle.Off) return;
             if (RebuiltPlugin._requireResources.Value is RebuiltPlugin.Toggle.Off) return;
             if (Player.m_localPlayer.GetHoveringPiece() is { } piece && piece.TryGetComponent(out GhostPiece component) && component.IsGhost())
@@ -304,7 +331,9 @@ public class GhostPiece : MonoBehaviour
         private static bool Prefix(WearNTear __instance)
         {
             if (RebuiltPlugin._enabled.Value is RebuiltPlugin.Toggle.Off) return true;
-            return !__instance.TryGetComponent(out GhostPiece component) || component.Rebuild();
+            if (!__instance.TryGetComponent(out GhostPiece component)) return true;
+            if (!component.IsGhost()) return true;
+            return component.Rebuild();
         }
     }
     

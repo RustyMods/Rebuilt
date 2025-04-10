@@ -16,8 +16,8 @@
 - **Performance**  
   Ghosts retain only minimal functionality. Effects, support calculations, and interactions are disabled unless required, ensuring they don't burden the game world unnecessarily.
 
-- **Configuration Support**  
-  Plugin behavior—such as whether rebuilding costs resources, or whether ghost pieces provide support—can be customized in the plugin settings.
+- **Configurations**  
+  Plugin behavior—such as whether rebuilding costs resources, ward required or whether ghost pieces provide support—can be customized.
 
 - **Blacklist Compatible**  
   Automatically excludes ships and other user-defined prefabs via a blacklist.
